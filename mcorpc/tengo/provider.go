@@ -56,6 +56,7 @@ func (p *Provider) RegisterAgents(ctx context.Context, mgr server.AgentManager, 
 
 func (p *Provider) loadAgents() {
 	agent.EachFile([]string{"/etc/choria/tengo"}, func(name string, path string) (stop bool) {
+		p.log.Warnf("Trying to register %s in %s", name, path)
 		ddl, err := agent.New(path)
 		if err == nil {
 			p.agents = append(p.agents, ddl)

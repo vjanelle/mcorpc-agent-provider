@@ -40,36 +40,28 @@ func tengoAction(ctx context.Context, req *mcorpc.Request, reply *mcorpc.Reply, 
 	}
 
 	s := script.New(code)
-	c, err := s.Compile()
-	if err != nil {
-		abortAction(fmt.Sprintf("Could not compile action: %s", err), agent, reply)
-		return
-	}
 
-	err = s.Add("rpc", req)
+	_, err = createRequestMap(req, s)
 	if err != nil {
 		abortAction(fmt.Sprintf("Could not set rpc data: %s", err), agent, reply)
 		return
 	}
 
-	replymap := make(map[string]interface{})
-
-	err = s.Add("reply", replymap)
+	_, err = createReplyMap(req.Action, agent, s)
 	if err != nil {
-		abortAction(fmt.Sprintf("Could not set reply data: %s", err), agent, reply)
+		abortAction(fmt.Sprintf("Could not create reply data: %s", err), agent, reply)
 		return
 	}
 
-	data := make(map[string]interface{})
-	err = json.Unmarshal(req.Data, &data)
-	if err != nil {
-		abortAction(fmt.Sprintf("Could not parse request data: %s", err), agent, reply)
-		return
-	}
-
-	err = s.Add("request", data)
+	_, err = createDataMap(req, s)
 	if err != nil {
 		abortAction(fmt.Sprintf("Could not set request data: %s", err), agent, reply)
+		return
+	}
+
+	c, err := s.Compile()
+	if err != nil {
+		abortAction(fmt.Sprintf("Could not compile action: %s", err), agent, reply)
 		return
 	}
 
@@ -79,7 +71,76 @@ func tengoAction(ctx context.Context, req *mcorpc.Request, reply *mcorpc.Reply, 
 		return
 	}
 
-	reply.Data = c.Get("reply").Map()
+	repObj, ok := c.Get("reply").Object().(*Reply)
+	if !ok {
+		abortAction("Could not retrieve reply data", agent, reply)
+	}
+
+	reply.Data = repObj.Data()
+}
+
+func createDataMap(req *mcorpc.Request, s *script.Script) (data map[string]interface{}, err error) {
+	data = make(map[string]interface{})
+	err = json.Unmarshal(req.Data, &data)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.Add("request", data)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func createRequestMap(req *mcorpc.Request, s *script.Script) (request map[string]interface{}, err error) {
+	request = make(map[string]interface{})
+
+	j, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(j, &request)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.Add("rpc", request)
+	if err != nil {
+		return nil, err
+	}
+
+	return request, nil
+}
+
+// creates a map[string]interface{} from the DDL setting defaults etc
+func createReplyMap(action string, a *mcorpc.Agent, s *script.Script) (reply *Reply, err error) {
+	addl, err := agent.Find(a.Name(), []string{"/etc/choria/tengo"})
+	if err != nil {
+		return nil, fmt.Errorf("could not find DDL for %s: %s", a.Name(), err)
+	}
+
+	actInterface, err := addl.ActionInterface(action)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load action %s#%s: %s", a.Name(), action, err)
+	}
+
+	reply = &Reply{
+		data: make(map[string]interface{}),
+	}
+
+	for item, opts := range actInterface.Output {
+		reply.data[item] = opts.Default
+	}
+
+	err = s.Add("reply", reply)
+	if err != nil {
+		return nil, err
+	}
+
+	return reply, err
 }
 
 func abortAction(reason string, agent *mcorpc.Agent, reply *mcorpc.Reply) {
