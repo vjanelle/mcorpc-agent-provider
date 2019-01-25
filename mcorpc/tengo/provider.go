@@ -1,4 +1,4 @@
-package ruby
+package tengo
 
 import (
 	"context"
@@ -11,10 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// agents we do not ever wish to load from ruby
-var denylist = []string{"rpcutil", "choria_util", "discovery"}
-
-// Provider is a Agent Provider capable of executing old mcollective ruby agents
 type Provider struct {
 	fw     *choria.Framework
 	cfg    *config.Config
@@ -22,10 +18,10 @@ type Provider struct {
 	agents []*agent.DDL
 }
 
-// New creates a new provider that will find ruby agents in the configured libdirs
+// New creates a new provider that will find ruby agents in the configured directories
 func New(fw *choria.Framework) *Provider {
 	p := &Provider{}
-	p.Initialize(fw, logrus.WithFields(logrus.Fields{"provider": "ruby"}))
+	p.Initialize(fw, logrus.WithFields(logrus.Fields{"provider": "tengo"}))
 
 	return p
 }
@@ -36,26 +32,37 @@ func (p *Provider) Initialize(fw *choria.Framework, log *logrus.Entry) {
 	p.cfg = fw.Config
 	p.log = log
 
-	p.loadAgents(fw.Config.Choria.RubyLibdir)
+	p.loadAgents()
 }
 
-// RegisterAgents registers known ruby agents using a shimm agent
+// RegisterAgents registers known Tengo agents
 func (p *Provider) RegisterAgents(ctx context.Context, mgr server.AgentManager, connector choria.InstanceConnector, log *logrus.Entry) error {
 	for _, ddl := range p.Agents() {
-		agent, err := NewRubyAgent(ddl, mgr)
+		agent, err := NewTengoAgent(ddl, mgr)
 		if err != nil {
-			p.log.Errorf("Could not register Ruby agent %s: %s", ddl.Metadata.Name, err)
+			p.log.Errorf("Could not register Tengo agent %s: %s", ddl.Metadata.Name, err)
 			continue
 		}
 
 		err = mgr.RegisterAgent(ctx, agent.Name(), agent, connector)
 		if err != nil {
-			p.log.Errorf("Could not register Ruby agent %s: %s", ddl.Metadata.Name, err)
+			p.log.Errorf("Could not register Tengo agent %s: %s", ddl.Metadata.Name, err)
 			continue
 		}
 	}
 
 	return nil
+}
+
+func (p *Provider) loadAgents() {
+	agent.EachFile([]string{"/etc/choria/tengo"}, func(name string, path string) (stop bool) {
+		ddl, err := agent.New(path)
+		if err == nil {
+			p.agents = append(p.agents, ddl)
+		}
+
+		return false
+	})
 }
 
 // Agents provides a list of loaded agent DDLs

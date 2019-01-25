@@ -1,0 +1,5 @@
+print(rpc)
+print(request)
+print(request.hello)
+
+reply.message = "hello " + request.hello
