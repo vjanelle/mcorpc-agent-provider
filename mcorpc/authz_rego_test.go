@@ -7,45 +7,48 @@ import (
 	"github.com/choria-io/go-choria/server/agents"
 	"github.com/choria-io/go-config"
 	"github.com/choria-io/go-protocol/filter/facts"
-	"github.com/golang/mock/gomock"
+	"github.com/choria-io/go-testutil"
+	"github.com/choria-io/mcorpc-agent-provider/mcorpc/golang/rpcutil"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 )
 
-var _ = Describe("RegoPolicy", func() {
+var _ = Describe("regoPolicy", func() {
 	var (
-		authz   *regoPolicy
-		logger  *logrus.Entry
-		fw      *choria.Framework
-		err     error
-		is      *MockServerInfoSource
-		mockctl *gomock.Controller
+		authz  *regoPolicy
+		logger *logrus.Entry
+		fw     *choria.Framework
+		cn     *testutil.ChoriaNetwork
+		err    error
+		am     *agents.Manager
 	)
 
 	BeforeEach(func() {
 
-		mockctl = gomock.NewController(GinkgoT())
-		defer mockctl.Finish()
-
-		// logbuffer = &bytes.Buffer{}^
 		logger = logrus.NewEntry(logrus.New())
-		logger.Logger.SetLevel(logrus.TraceLevel)
+		logger.Logger.SetLevel(logrus.DebugLevel)
 		logger.Logger.Out = GinkgoWriter
 
 		cfg := config.NewConfigForTests()
-		cfg.ClassesFile = "testdata/classes.txt"
-		cfg.FactSourceFile = "testdata/facts.json"
-		cfg.DisableSecurityProviderVerify = true
+		cfg.ClassesFile = "testdata/rego/classes.txt"
 		cfg.ConfigFile = "testdata/server.conf"
-		cfg.Choria.Provision = true
+		cfg.FactSourceFile = "testdata/rego/facts.json"
 
-		is = NewMockServerInfoSource(mockctl)
-
-		is.EXPECT().KnownAgents().Return([]string{"stub_agent", "buts_agent"}).AnyTimes()
+		cfg.DisableSecurityProviderVerify = true
 
 		fw, err = choria.NewWithConfig(cfg)
 		Expect(err).ToNot(HaveOccurred())
+
+		cn, err = testutil.StartChoriaNetwork(cfg)
+		Expect(err).ToNot(HaveOccurred())
+
+		am = agents.New(nil, fw, nil, cn.ServerInstance(), nil)
+		rpc, err := rpcutil.New(am)
+
+		Expect(err).ToNot(HaveOccurred())
+
+		rpc.SetServerInfo(cn.ServerInstance())
 
 		metadata := agents.Metadata{
 			Name:    "ginkgo",
@@ -69,19 +72,24 @@ var _ = Describe("RegoPolicy", func() {
 				Log:              logger,
 				Config:           cfg,
 				Choria:           fw,
-				ServerInfoSource: is,
+				ServerInfoSource: cn.ServerInstance(),
 			},
 		}
+
+	})
+
+	AfterEach(func() {
+		cn.Stop()
 	})
 
 	Describe("Basic tests", func() {
 		var (
-			defaultFacts = json.RawMessage(`{"stub": true, "buts": "big"}`)
+		// defaultFacts = json.RawMessage(`{"stub": true, "buts": "big"}`)
 		)
 
 		BeforeEach(func() {
-			is.EXPECT().Facts().Return(json.RawMessage(defaultFacts)).AnyTimes()
-			is.EXPECT().Classes().Return([]string{"alpha", "beta"}).AnyTimes()
+			// is.EXPECT().Facts().Return(json.RawMessage(defaultFacts)).AnyTimes()
+			// is.EXPECT().Classes().Return([]string{"alpha", "beta"}).AnyTimes()
 		})
 
 		Context("When the user agent or caller is right", func() {
@@ -125,11 +133,11 @@ var _ = Describe("RegoPolicy", func() {
 
 	Describe("Failing tests", func() {
 		var (
-			defaultFacts = json.RawMessage(`{"stub": false, "buts": true}`)
+		// defaultFacts = json.RawMessage(`{"stub": false, "buts": true}`)
 		)
 		BeforeEach(func() {
-			is.EXPECT().Facts().Return(json.RawMessage(defaultFacts)).AnyTimes()
-			is.EXPECT().Classes().Return([]string{"charlie", "delta"}).AnyTimes()
+			// is.EXPECT().Facts().Return(json.RawMessage(defaultFacts)).AnyTimes()
+			// is.EXPECT().Classes().Return([]string{"charlie", "delta"}).AnyTimes()
 		})
 		Context("When the user agent or caller is wrong", func() {
 			It("Should fail if agent isn't ginkgo", func() {
@@ -176,12 +184,12 @@ var _ = Describe("RegoPolicy", func() {
 
 	Describe("Agents", func() {
 		var (
-			defaultFacts = json.RawMessage(`{"stub": true, "buts": "big"}`)
+		// defaultFacts = json.RawMessage(`{"stub": true, "buts": "big"}`)
 		)
 
 		BeforeEach(func() {
-			is.EXPECT().Facts().Return(json.RawMessage(defaultFacts)).AnyTimes()
-			is.EXPECT().Classes().Return([]string{"alpha", "beta"}).AnyTimes()
+			// is.EXPECT().Facts().Return(json.RawMessage(defaultFacts)).AnyTimes()
+			// is.EXPECT().Classes().Return([]string{"alpha", "beta"}).AnyTimes()
 		})
 
 		Context("If agent exists on the server", func() {
@@ -198,7 +206,7 @@ var _ = Describe("RegoPolicy", func() {
 	Describe("Facts", func() {
 
 		BeforeEach(func() {
-			is.EXPECT().Classes().Return([]string{"alpha", "beta"}).AnyTimes()
+			// is.EXPECT().Classes().Return([]string{"alpha", "beta"}).AnyTimes()
 
 		})
 
@@ -208,7 +216,7 @@ var _ = Describe("RegoPolicy", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(f).To(BeEquivalentTo(json.RawMessage("{}")))
 
-				is.EXPECT().Facts().Return(f).AnyTimes()
+				// is.EXPECT().Facts().Return(f).AnyTimes()
 
 				authz.agent.meta.Name = "Facts"
 				auth, err := authz.authorize()

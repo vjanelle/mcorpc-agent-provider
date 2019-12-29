@@ -22,4 +22,5 @@ require (
 	github.com/tidwall/gjson v1.3.5
 	github.com/tidwall/pretty v1.0.0
 	go.uber.org/atomic v1.5.1
+	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
 )

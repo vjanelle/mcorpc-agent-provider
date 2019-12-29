@@ -54,6 +54,10 @@ func (r *regoPolicy) authorize() (bool, error) {
 
 	buf := topdown.NewBufferTracer()
 
+	if r.log.Logger.GetLevel() == logrus.DebugLevel {
+		r.log.Debugf("regoInputs: %v", r.regoInputs())
+	}
+
 	options := []func(*rego.Rego){
 		rego.Query("data.choria.mcorpc.authpolicy.allow"),
 		rego.Module(policyFile, module),
@@ -98,11 +102,13 @@ func (r *regoPolicy) lookupPolicyFile() (string, error) {
 
 	r.log.Debugf("Looking up rego policy in %s", regoPolicy)
 	if choria.FileExist(regoPolicy) {
+		r.log.Debugf("Using policy file: %s", regoPolicy)
 		return regoPolicy, nil
 	}
 
 	defaultPolicy := filepath.Join(dir, "default.rego")
 	if choria.FileExist(defaultPolicy) {
+		r.log.Debugf("Using policy file: %s", defaultPolicy)
 		return defaultPolicy, nil
 	}
 	return "", fmt.Errorf("no policy %s found for %s in %s", defaultPolicy, r.agent.Name(), dir)
